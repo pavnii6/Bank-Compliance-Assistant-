@@ -1,0 +1,32 @@
+services:
+  # ── MCP SSE server ─────────────────────────────────────────────────────────
+  - type: web
+    name: bank-mcp-server
+    runtime: python
+    pythonVersion: "3.11.3"
+    buildCommand: pip install -r requirements.txt
+    startCommand: python -m chatbot.mcp.server_sse
+    envVars:
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: MCP_HOST
+        value: 0.0.0.0
+      - key: VECTOR_DB_DIR
+        value: ./chroma_db
+      - key: DOCS_DIRECTORY
+        value: ./rbc_documents
+
+  # ── Flask web application ──────────────────────────────────────────────────
+  - type: web
+    name: bank-flask-app
+    runtime: python
+    pythonVersion: "3.11.3"
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --workers 1 --threads 4 --timeout 120
+    envVars:
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: SECRET_KEY
+        generateValue: true
+      - key: MCP_URL
+        sync: false

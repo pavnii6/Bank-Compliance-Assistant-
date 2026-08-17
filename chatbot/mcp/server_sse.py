@@ -1,39 +1,41 @@
-from mcp.server.fastmcp import FastMCP
-from dotenv import load_dotenv
-from decimal import Decimal
+"""MCP SSE server exposing banking tools and RAG Q&A."""
 import os
 import sys
 import datetime
+from decimal import Decimal
 
-# Add the parent directory to the Python path to import from src and chatbot
-parent_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '../..'))
-sys.path.append(parent_dir)
-print(f"Added to Python path: {parent_dir}")
+from dotenv import load_dotenv
+from mcp.server.fastmcp import FastMCP
 
-# Import RAG components
-from chatbot.rag.rag_chatbot import RBCChatbot
+# Ensure the project root is on the path so chatbot.* imports work
+_project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
+if _project_root not in sys.path:
+    sys.path.insert(0, _project_root)
 
-# Import the actual database functions
-from chatbot.account import list_accounts, list_transfer_target_accounts, transfer_between_accounts
+# Load .env (no-op on Render where vars are set via dashboard)
+load_dotenv(os.path.join(_project_root, ".env"))
+
+# ── Database init ────────────────────────────────────────────────────────────
 from chatbot.database import init_db
-from chatbot.models import Account
-
-# Load environment variables from .env file
-load_dotenv("../../.env")
-
-# Initialize the database if it doesn't exist (will check internally)
 init_db()
 
-# Initialize the RAG chatbot
+# ── RAG chatbot (singleton) ──────────────────────────────────────────────────
+from chatbot.rag.rag_chatbot import RBCChatbot
 chatbot = RBCChatbot()
 
-# Import configuration
-from chatbot.config import MCP_NAME, MCP_HOST, MCP_PORT, DEFAULT_USER_ID
+# ── Account helpers ──────────────────────────────────────────────────────────
+from chatbot.account import (
+    list_accounts,
+    list_transfer_target_accounts,
+    transfer_between_accounts,
+)
 
-# Create the MCP server
+# ── MCP server ───────────────────────────────────────────────────────────────
+from chatbot.config import MCP_NAME, MCP_HOST, MCP_PORT
+
 mcp = FastMCP(name=MCP_NAME, host=MCP_HOST, port=MCP_PORT)
 
-# RAG Tool: Answer questions using the RAG system
+
 @mcp.tool()
 def answer_banking_question(question: str) -> dict:
     """
@@ -42,143 +44,115 @@ def answer_banking_question(question: str) -> dict:
     Returns the answer and sources.
     """
     print(f"[RAG] Processing question: {question}")
-    
-    # Process the question - the model should determine if it's banking-related
-    # based on the system instructions
     result = chatbot.answer_question(question)
     print(f"[RAG] Found answer with {len(result['sources'])} sources")
-    return {
-        "answer": result["answer"],
-        "sources": result["sources"]
-    }
+    return {"answer": result["answer"], "sources": result["sources"]}
 
-# Tool 1: List all accounts belonging to a user
+
 @mcp.tool()
-def list_user_accounts(user_id: str) -> list[dict]:
+def list_user_accounts(user_id: str) -> list:
     """List all accounts for a given user."""
     accounts = list_accounts(user_id)
-    print(f"[DEBUG] list_user_accounts called with user_id={user_id}")
-    print(f"[DEBUG] Accounts: {accounts}")
+    print(f"[DEBUG] list_user_accounts: user_id={user_id}, count={len(accounts)}")
     return [account.__dict__ for account in accounts]
 
-# Tool 2: List target accounts that can receive transfers
+
 @mcp.tool()
-def list_target_accounts(user_id: str, from_account: str) -> list[dict]:
+def list_target_accounts(user_id: str, from_account: str) -> list:
     """List all other accounts this user can transfer to."""
     accounts = list_transfer_target_accounts(user_id, from_account)
-    print(f"[DEBUG] list_target_accounts called with user_id={user_id}, from_account={from_account}")
-    print(f"[DEBUG] Transfer targets: {accounts}")
+    print(f"[DEBUG] list_target_accounts: user_id={user_id}, from={from_account}")
     return [account.__dict__ for account in accounts]
 
-# Tool 3: Transfer funds between two accounts
+
 @mcp.tool()
 def transfer_funds(user_id: str, from_account: str, to_account: str, amount: str) -> str:
     """Transfer funds from one account to another."""
-    print(f"[DEBUG] transfer_funds called with user_id={user_id}, from_account={from_account}, to_account={to_account}, amount={amount}")
+    print(f"[DEBUG] transfer_funds: user_id={user_id}, from={from_account}, to={to_account}, amount={amount}")
     try:
-        # Convert amount to Decimal, handling any formatting issues
-        clean_amount = amount.replace('$', '').replace(',', '')
+        clean_amount = amount.replace("$", "").replace(",", "").strip()
         decimal_amount = Decimal(clean_amount)
-        
-        # Debug the parameters
-        print(f"[DEBUG] Parsed amount: {decimal_amount} (type: {type(decimal_amount)})")
-        print(f"[DEBUG] from_account: {from_account} (type: {type(from_account)})")
-        print(f"[DEBUG] to_account: {to_account} (type: {type(to_account)})")
-        
-        # Call the transfer function
         transfer_between_accounts(user_id, from_account, to_account, decimal_amount)
-        return f"✅ Transferred ${clean_amount} from {from_account} to {to_account}."
-    except Exception as e:
-        print(f"[ERROR] Transfer failed: {str(e)}")
-        return f"❌ Transfer failed: {str(e)}"
+        return f"Transferred ${clean_amount} from account {from_account} to account {to_account}."
+    except Exception as exc:
+        print(f"[ERROR] transfer_funds failed: {exc}")
+        return f"Transfer failed: {exc}"
 
-# Tool 4: Get account balance
+
 @mcp.tool()
 def get_account_balance(user_id: str, account_number: str) -> dict:
     """Get the balance of a specific account."""
-    print(f'[DEBUG] get_account_balance called with user_id={user_id}, account_number={account_number}')
-    
-    # Find the account in the user's accounts
-    accounts = list_accounts(user_id)
-    for account in accounts:
+    print(f"[DEBUG] get_account_balance: user_id={user_id}, account={account_number}")
+    for account in list_accounts(user_id):
         if account.account_number == account_number:
             return {
                 "account_number": account.account_number,
                 "account_name": account.account_name,
                 "balance": str(account.balance),
-                "currency": "CAD"
+                "currency": "CAD",
             }
-    
     return {"error": f"Account {account_number} not found."}
 
-# Tool 5: Get transaction history
+
 @mcp.tool()
-def get_transaction_history(user_id: str, account_number: str, days: int = 30) -> list[dict]:
+def get_transaction_history(user_id: str, account_number: str, days: int = 30) -> list:
     """Get the transaction history for a specific account."""
-    print(f"[DEBUG] get_transaction_history called with user_id={user_id}, account_number={account_number}, days={days}")
-    
-    # Connect to the database to get transaction history
+    print(f"[DEBUG] get_transaction_history: user_id={user_id}, account={account_number}, days={days}")
+
     import sqlite3
     from chatbot.database import DB_FILE
-    
+
     con = sqlite3.connect(DB_FILE)
     con.row_factory = sqlite3.Row
     cur = con.cursor()
-    
-    # Calculate the date range
-    today = datetime.datetime.now()
-    start_date = (today - datetime.timedelta(days=days)).isoformat()
-    
-    # Query for transactions with balances
-    cur.execute("""
-        SELECT 
-            TransactionNumber, 
-            TransferDateTime, 
-            CASE 
-                WHEN FromAccountNumber = :account_number THEN 'debit' 
-                ELSE 'credit' 
-            END as transaction_type,
-            CASE 
-                WHEN FromAccountNumber = :account_number THEN -Amount 
-                ELSE Amount 
-            END as amount,
-            CASE 
-                WHEN FromAccountNumber = :account_number THEN 'Transfer to ' || ToAccountNumber
+
+    start_date = (datetime.datetime.now() - datetime.timedelta(days=days)).isoformat()
+
+    cur.execute(
+        """
+        SELECT
+            TransactionNumber,
+            TransferDateTime,
+            CASE
+                WHEN FromAccountNumber = :acct THEN 'debit'
+                ELSE 'credit'
+            END AS transaction_type,
+            CASE
+                WHEN FromAccountNumber = :acct THEN -Amount
+                ELSE Amount
+            END AS amount,
+            CASE
+                WHEN FromAccountNumber = :acct THEN 'Transfer to ' || ToAccountNumber
                 ELSE 'Transfer from ' || FromAccountNumber
-            END as description,
-            CASE 
-                WHEN FromAccountNumber = :account_number THEN FromAccountBalance
+            END AS description,
+            CASE
+                WHEN FromAccountNumber = :acct THEN FromAccountBalance
                 ELSE ToAccountBalance
-            END as balance_after
+            END AS balance_after
         FROM Transfers
-        WHERE (FromAccountNumber = :account_number OR ToAccountNumber = :account_number)
-        AND TransferDateTime >= :start_date
+        WHERE (FromAccountNumber = :acct OR ToAccountNumber = :acct)
+          AND TransferDateTime >= :start_date
         ORDER BY TransferDateTime DESC
-    """, {"account_number": account_number, "start_date": start_date})
-    
-    rows = cur.fetchall()
-    
-    # Create transaction objects using stored balances
+        """,
+        {"acct": account_number, "start_date": start_date},
+    )
+
     transactions = []
-    
-    for row in rows:
-        amount = Decimal(str(row['amount']))
-        
-        transaction = {
-            "transaction_id": row['TransactionNumber'],
-            "date": row['TransferDateTime'].split('T')[0],  # Just the date part
-            "description": row['description'],
-            "amount": str(amount),
-            "transaction_type": row['transaction_type'],
-            "balance_after": str(row['balance_after'])
-        }
-        transactions.append(transaction)
-    
+    for row in cur.fetchall():
+        transactions.append({
+            "transaction_id": row["TransactionNumber"],
+            "date": row["TransferDateTime"].split("T")[0],
+            "description": row["description"],
+            "amount": str(Decimal(str(row["amount"]))),
+            "transaction_type": row["transaction_type"],
+            "balance_after": str(row["balance_after"]),
+        })
+
     con.close()
-    print(f"[DEBUG] Returning: {len(transactions)} transactions")
+    print(f"[DEBUG] Returning {len(transactions)} transactions")
     return transactions
 
-# Run the MCP server using SSE transport
+
 if __name__ == "__main__":
-    print("[INFO] Starting MCP server on http://127.0.0.1:8050 using SSE transport...")
+    print(f"[INFO] Starting MCP server — host={MCP_HOST} port={MCP_PORT}")
     mcp.run(transport="sse")

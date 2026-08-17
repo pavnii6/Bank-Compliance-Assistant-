@@ -44,9 +44,9 @@ CREATE TABLE IF NOT EXISTS Transactions (
 
 INSERT OR IGNORE INTO UserCredentials (UserId, Password)
 VALUES 
-  ('test1', 'password1'),
-  ('test2', 'password2'),
-  ('test3', 'passowrd3');
+  ('test1', 'password'),
+  ('test2', 'password'),
+  ('test3', 'password');
 
 
 INSERT OR IGNORE INTO Accounts (AccountNumber, UserId, AccountName, Balance, CurrencyCode)

@@ -1,37 +1,53 @@
+# ── Web framework ────────────────────────────────────────────────────────────
 Flask==2.3.3
-PyJWT==2.8.0
 Werkzeug==2.3.7
+gunicorn==21.2.0
 
-# Core dependencies
-google-generativeai>=0.3.2
-python-dotenv>=1.0.0
+# ── Auth ─────────────────────────────────────────────────────────────────────
+PyJWT==2.8.0
+cryptography==41.0.7
+
+# ── Google Gemini — pinned for Python 3.11 compatibility ─────────────────────
+# protobuf 4.x is required; 5.x breaks on Python 3.11 with google-generativeai
+google-generativeai==0.4.1
+google-api-core==2.15.0
+google-auth==2.27.0
+googleapis-common-protos==1.62.0
+protobuf==4.25.3
+grpcio==1.60.1
+grpcio-status==1.60.1
+
+# ── LangChain — pinned compatible set ────────────────────────────────────────
 langchain==0.1.20
-langchain-google-genai==0.0.6
+langchain-core==0.1.52
+langchain-google-genai==0.0.11
 langchain-community==0.0.38
 langchain-chroma==0.1.2
+
+# ── Vector DB ────────────────────────────────────────────────────────────────
 chromadb==0.5.3
 
-# Document processing
-pypdf>=3.15.1
-sentence-transformers>=2.2.2
+# ── Embeddings — CPU-only torch (avoids 2 GB CUDA download on Render) ────────
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.2.2+cpu
+torchvision==0.17.2+cpu
+sentence-transformers==2.7.0
 
-# Web scraping and data collection
-requests>=2.31.0
-beautifulsoup4>=4.12.2
+# ── Document processing ───────────────────────────────────────────────────────
+pypdf==3.17.4
 
-# Security
-cryptography>=41.0.0
+# ── Web scraping ──────────────────────────────────────────────────────────────
+requests==2.31.0
+beautifulsoup4==4.12.3
 
-# MCP framework
+# ── MCP framework ─────────────────────────────────────────────────────────────
 mcp==1.9.1
-fastapi>=0.100.0
-uvicorn>=0.22.0
-aiohttp>=3.8.5
-asyncio>=3.4.3
+fastapi==0.111.0
+uvicorn==0.29.0
+sse-starlette==1.8.2
+aiohttp==3.9.5
+httpx==0.27.0
 
-# Database
-# sqlite3 is part of the Python standard library
-
-# Optional for older Python versions
-dataclasses; python_version<"3.7"
-gunicorn
+# ── Utilities ─────────────────────────────────────────────────────────────────
+python-dotenv==1.0.1
+pydantic==2.7.1

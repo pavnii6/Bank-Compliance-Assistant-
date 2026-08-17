@@ -24,7 +24,15 @@ DEFAULT_USER_ID = "test1"
 VECTOR_DB_DIR = os.environ.get("VECTOR_DB_DIR", "./chroma_db")
 DOCS_DIRECTORY = os.environ.get("DOCS_DIRECTORY", "./rbc_documents")
 
-# API settings
-MCP_HOST = os.environ.get("MCP_HOST", "127.0.0.1")
-MCP_PORT = int(os.environ.get("MCP_PORT", "8050"))
+# MCP server settings
+# MCP_HOST / MCP_PORT control what address the MCP *server* binds to.
+# On Render, MCP_HOST must be 0.0.0.0 and PORT is injected automatically.
+MCP_HOST = os.environ.get("MCP_HOST", "0.0.0.0")
+MCP_PORT = int(os.environ.get("PORT", os.environ.get("MCP_PORT", "8050")))
 MCP_NAME = os.environ.get("MCP_NAME", "RBC-RAG-MCP")
+
+# Full SSE URL the Flask client connects to.
+# In production set MCP_URL to the public URL of your Render MCP service, e.g.:
+#   https://bank-mcp-server.onrender.com/sse
+# Locally it falls back to localhost.
+MCP_URL = os.environ.get("MCP_URL", f"http://127.0.0.1:{MCP_PORT}/sse")

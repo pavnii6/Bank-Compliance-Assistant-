@@ -41,9 +41,9 @@ class InteractiveBankingAssistant:
     
     async def initialize_session(self):
         """Initialize the MCP session."""
-        from chatbot.config import MCP_HOST, MCP_PORT
-        
-        mcp_url = f"http://{MCP_HOST}:{MCP_PORT}/sse"
+        from chatbot.config import MCP_URL
+        mcp_url = MCP_URL
+        print(f"[INFO] Connecting to MCP server at {mcp_url}")
         self.sse_client = sse_client(mcp_url)
         self.read_stream, self.write_stream = await self.sse_client.__aenter__()
         self.session = ClientSession(self.read_stream, self.write_stream)
