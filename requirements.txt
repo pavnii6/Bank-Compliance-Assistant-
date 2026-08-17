@@ -34,3 +34,4 @@ asyncio>=3.4.3
 
 # Optional for older Python versions
 dataclasses; python_version<"3.7"
+gunicorn
